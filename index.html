@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Ransom Square Simulation</title>
+<style>
+  :root{--r:#ff1a1a;--bg:#000}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--r);font-family:monospace;overflow:hidden;user-select:none}
+  #overlay{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999}
+  .skull{font-size:60px;filter:drop-shadow(0 0 12px rgba(255,0,0,.5))}
+  h1{letter-spacing:.18em;margin:6px 0;font-size:32px}
+  .msg{color:#ff9b9b;margin:10px;text-align:center;max-width:90%}
+  #inputBox{margin-top:18px;display:flex;flex-direction:column;gap:12px;align-items:center;width:320px}
+  input{width:100%;padding:12px;border-radius:12px;border:2px solid #661111;background:#110; color:#fff;text-align:center;font-size:16px; outline:none}
+  button{padding:12px 20px;border-radius:12px;border:none;background:var(--r);color:#fff;font-weight:700;cursor:pointer}
+  #msgSmall{margin-top:10px;color:#ffbaba}
+  /* notes that spawn */
+  .note{position:absolute;width:260px;padding:12px;background:rgba(0,0,0,.85);border:2px solid var(--r);color:var(--r);box-shadow:0 0 30px rgba(255,0,0,.25);border-radius:10px;text-align:center;font-size:13px}
+  .timerBig{font-size:44px;margin-top:6px}
+</style>
+</head>
+<body>
+  <div id="overlay" aria-hidden="false">
+    <div class="skull">💀</div>
+    <h1>RANSOM SQUARE</h1>
+    <div class="msg">Semua file Anda telah dienkripsi!<br>Masukkan kunci untuk keluar.</div>
+
+    <div id="inputBox">
+      <div id="countDisplay" class="timerBig">60:00</div>
+      <input id="key" type="password" placeholder="Masukkan kunci" autocomplete="off" />
+      <button id="btn">DECRYPT</button>
+      <div id="msgSmall"></div>
+    </div>
+  </div>
+
+<script>
+  // CONFIG
+  const CORRECT_KEY = "dxploit~";
+  const DURATION = 60 * 60; // seconds (1 jam)
+  const STORAGE_KEY = "ransom_deadline_v2";
+
+  // persistent deadline so refresh still keeps time
+  let deadline = parseInt(localStorage.getItem(STORAGE_KEY),10);
+  if (!deadline || isNaN(deadline) || deadline < Date.now()) {
+    deadline = Date.now() + DURATION * 1000;
+    localStorage.setItem(STORAGE_KEY, String(deadline));
+  }
+
+  // timer display
+  const countDisplay = document.getElementById("countDisplay");
+  function fmt(t){
+    const m = Math.floor(t/60), s = t%60;
+    return `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+  }
+
+  let tick = setInterval(()=>{
+    const left = Math.max(0, Math.floor((deadline - Date.now())/1000));
+    countDisplay.textContent = fmt(left);
+    document.querySelectorAll(".note .ntimer").forEach(n=>{
+      n.textContent = fmt(left);
+    });
+    if (left <= 0) { clearInterval(tick); lockout(); }
+  },1000);
+
+  // spawn notes gradually (visual)
+  function spawnNote(){
+    const note = document.createElement("div");
+    note.className = "note";
+    note.style.top = Math.random() * (window.innerHeight - 160) + "px";
+    note.style.left = Math.random() * (window.innerWidth - 280) + "px";
+    note.innerHTML = `<div style="font-weight:700">💀 RANSOM SQUARE 💀</div>
+                      <div style="margin-top:6px">Semua file Anda terenkripsi!</div>
+                      <div class="ntimer" style="margin-top:8px;font-weight:700">${countDisplay.textContent}</div>`;
+    document.body.appendChild(note);
+    // small fade-in
+    note.style.opacity = 0;
+    requestAnimationFrame(()=> note.style.transition = "opacity .35s", note.style.opacity = 1);
+    return note;
+  }
+  // initial
+  spawnNote();
+
+  // increase notes over time: every 4s spawn new; faster after 30s
+  let spawnInterval = 4000;
+  setInterval(()=> spawnNote(), spawnInterval);
+
+  // Freeze tricks
+  function preventAll(e){ e.preventDefault(); }
+  window.addEventListener("contextmenu", preventAll);
+  window.addEventListener("keydown", preventAll);
+  window.addEventListener("touchstart", function(){ /* allow touches but do nothing */ });
+
+  // DECRYPT logic
+  const keyInput = document.getElementById("key");
+  const btn = document.getElementById("btn");
+  const msgSmall = document.getElementById("msgSmall");
+
+  btn.addEventListener("click", tryKey);
+  keyInput.addEventListener("keydown", (e)=>{ if(e.key === "Enter") tryKey(); });
+
+  function tryKey(){
+    const v = keyInput.value || "";
+    if (v === CORRECT_KEY) {
+      // clear lock
+      localStorage.removeItem(STORAGE_KEY);
+      document.getElementById("overlay").innerHTML = "<div style='color:lime;font-size:22px;font-weight:700'>✅ File dipulihkan. Anda bebas.</div>";
+      // remove notes
+      document.querySelectorAll(".note").forEach(n=>n.remove());
+      // allow default behavior after a short delay
+      setTimeout(()=> {
+        // pure-simulation: redirect to a safe page (you can change)
+        location.href = "https://github.com"; 
+      },1300);
+    } else {
+      msgSmall.style.color = "#ffaaaa";
+      msgSmall.textContent = "❌ Kunci salah! Tetap terkunci.";
+      keyInput.value = "";
+      keyInput.focus();
+      // small shake effect
+      const o = document.getElementById("overlay");
+      o.animate([{transform:'translateX(-6px)'},{transform:'translateX(6px)'},{transform:'translateX(0)'}],{duration:260});
+    }
+  }
+
+  function lockout(){
+    // full lock screen
+    document.body.innerHTML = `<div style="height:100vh;display:flex;align-items:center;justify-content:center;background:black;color:var(--r);font-family:monospace">
+      <div style="text-align:center">
+        <div style="font-size:60px">💀</div>
+        <h2>WAKTU HABIS</h2>
+        <p>Session terkunci permanen.</p>
+      </div>
+    </div>`;
+  }
+
+  // extra: prevent back navigation on mobile (best-effort)
+  history.pushState(null, null, location.href);
+  window.onpopstate = function () { history.go(1); };
+</script>
+</body>
+</html>
